@@ -4,9 +4,8 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/prometheus-community/windows_exporter/perflib"
-
-	"github.com/go-kit/log"
+	perflibCollector "github.com/leoluk/perflib_exporter/collector"
+	"github.com/leoluk/perflib_exporter/perflib"
 )
 
 type simple struct {
@@ -38,7 +37,7 @@ func TestUnmarshalPerflib(t *testing.T) {
 							{
 								Def: &perflib.PerfCounterDef{
 									Name:        "Something",
-									CounterType: perflib.PERF_COUNTER_COUNTER,
+									CounterType: perflibCollector.PERF_COUNTER_COUNTER,
 								},
 								Value: 123,
 							},
@@ -58,14 +57,14 @@ func TestUnmarshalPerflib(t *testing.T) {
 							{
 								Def: &perflib.PerfCounterDef{
 									Name:        "Something",
-									CounterType: perflib.PERF_COUNTER_COUNTER,
+									CounterType: perflibCollector.PERF_COUNTER_COUNTER,
 								},
 								Value: 123,
 							},
 							{
 								Def: &perflib.PerfCounterDef{
 									Name:           "Something Else",
-									CounterType:    perflib.PERF_COUNTER_COUNTER,
+									CounterType:    perflibCollector.PERF_COUNTER_COUNTER,
 									HasSecondValue: true,
 								},
 								Value:       256,
@@ -87,7 +86,7 @@ func TestUnmarshalPerflib(t *testing.T) {
 							{
 								Def: &perflib.PerfCounterDef{
 									Name:        "Something",
-									CounterType: perflib.PERF_COUNTER_COUNTER,
+									CounterType: perflibCollector.PERF_COUNTER_COUNTER,
 								},
 								Value: 321,
 							},
@@ -98,7 +97,7 @@ func TestUnmarshalPerflib(t *testing.T) {
 							{
 								Def: &perflib.PerfCounterDef{
 									Name:        "Something",
-									CounterType: perflib.PERF_COUNTER_COUNTER,
+									CounterType: perflibCollector.PERF_COUNTER_COUNTER,
 								},
 								Value: 231,
 							},
@@ -113,7 +112,7 @@ func TestUnmarshalPerflib(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			output := make([]simple, 0)
-			err := unmarshalObject(c.obj, &output, log.NewNopLogger())
+			err := unmarshalObject(c.obj, &output)
 			if err != nil && !c.expectError {
 				t.Errorf("Did not expect error, got %q", err)
 			}

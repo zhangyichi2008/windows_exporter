@@ -4,28 +4,28 @@
 package collector
 
 import (
-	"github.com/go-kit/log"
-	"github.com/go-kit/log/level"
 	"github.com/prometheus-community/windows_exporter/headers/sysinfoapi"
+	"github.com/prometheus-community/windows_exporter/log"
+
 	"github.com/prometheus/client_golang/prometheus"
 )
 
+func init() {
+	registerCollector("cs", NewCSCollector)
+}
+
 // A CSCollector is a Prometheus collector for WMI metrics
 type CSCollector struct {
-	logger log.Logger
-
 	PhysicalMemoryBytes *prometheus.Desc
 	LogicalProcessors   *prometheus.Desc
 	Hostname            *prometheus.Desc
 }
 
-// newCSCollector ...
-func newCSCollector(logger log.Logger) (Collector, error) {
+// NewCSCollector ...
+func NewCSCollector() (Collector, error) {
 	const subsystem = "cs"
 
 	return &CSCollector{
-		logger: log.With(logger, "collector", subsystem),
-
 		LogicalProcessors: prometheus.NewDesc(
 			prometheus.BuildFQName(Namespace, subsystem, "logical_processors"),
 			"ComputerSystem.NumberOfLogicalProcessors",
@@ -54,7 +54,7 @@ func newCSCollector(logger log.Logger) (Collector, error) {
 // to the provided prometheus Metric channel.
 func (c *CSCollector) Collect(ctx *ScrapeContext, ch chan<- prometheus.Metric) error {
 	if desc, err := c.collect(ch); err != nil {
-		_ = level.Error(c.logger).Log("msg", "failed collecting cs metrics", "desc", desc, "err", err)
+		log.Error("failed collecting cs metrics:", desc, err)
 		return err
 	}
 	return nil

@@ -4,16 +4,17 @@
 package collector
 
 import (
-	"github.com/go-kit/log"
-	"github.com/go-kit/log/level"
+	"github.com/prometheus-community/windows_exporter/log"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/yusufpapurcu/wmi"
 )
 
+func init() {
+	registerCollector("netframework_clrremoting", NewNETFramework_NETCLRRemotingCollector)
+}
+
 // A NETFramework_NETCLRRemotingCollector is a Prometheus collector for WMI Win32_PerfRawData_NETFramework_NETCLRRemoting metrics
 type NETFramework_NETCLRRemotingCollector struct {
-	logger log.Logger
-
 	Channels                  *prometheus.Desc
 	ContextBoundClassesLoaded *prometheus.Desc
 	ContextBoundObjects       *prometheus.Desc
@@ -22,11 +23,10 @@ type NETFramework_NETCLRRemotingCollector struct {
 	TotalRemoteCalls          *prometheus.Desc
 }
 
-// newNETFramework_NETCLRRemotingCollector ...
-func newNETFramework_NETCLRRemotingCollector(logger log.Logger) (Collector, error) {
+// NewNETFramework_NETCLRRemotingCollector ...
+func NewNETFramework_NETCLRRemotingCollector() (Collector, error) {
 	const subsystem = "netframework_clrremoting"
 	return &NETFramework_NETCLRRemotingCollector{
-		logger: log.With(logger, "collector", subsystem),
 		Channels: prometheus.NewDesc(
 			prometheus.BuildFQName(Namespace, subsystem, "channels_total"),
 			"Displays the total number of remoting channels registered across all application domains since application started.",
@@ -70,7 +70,7 @@ func newNETFramework_NETCLRRemotingCollector(logger log.Logger) (Collector, erro
 // to the provided prometheus Metric channel.
 func (c *NETFramework_NETCLRRemotingCollector) Collect(ctx *ScrapeContext, ch chan<- prometheus.Metric) error {
 	if desc, err := c.collect(ch); err != nil {
-		_ = level.Error(c.logger).Log("failed collecting win32_perfrawdata_netframework_netclrremoting metrics", "desc", desc, "err", err)
+		log.Error("failed collecting win32_perfrawdata_netframework_netclrremoting metrics:", desc, err)
 		return err
 	}
 	return nil
@@ -90,7 +90,7 @@ type Win32_PerfRawData_NETFramework_NETCLRRemoting struct {
 
 func (c *NETFramework_NETCLRRemotingCollector) collect(ch chan<- prometheus.Metric) (*prometheus.Desc, error) {
 	var dst []Win32_PerfRawData_NETFramework_NETCLRRemoting
-	q := queryAll(&dst, c.logger)
+	q := queryAll(&dst)
 	if err := wmi.Query(q, &dst); err != nil {
 		return nil, err
 	}

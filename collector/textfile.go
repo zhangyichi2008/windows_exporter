@@ -27,21 +27,19 @@ import (
 	"strings"
 	"time"
 
-	"github.com/alecthomas/kingpin/v2"
+	kingpin "github.com/alecthomas/kingpin/v2"
 	"github.com/dimchansky/utfbom"
-	"github.com/go-kit/log"
-	"github.com/go-kit/log/level"
+	"github.com/prometheus-community/windows_exporter/log"
 	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"
 	"github.com/prometheus/common/expfmt"
 )
 
-const (
-	FlagTextFileDirectory = "collector.textfile.directory"
-)
-
 var (
-	textFileDirectory *string
+	textFileDirectory = kingpin.Flag(
+		"collector.textfile.directory",
+		"Directory to read text files with metrics from.",
+	).Default(getDefaultPath()).String()
 
 	mtimeDesc = prometheus.NewDesc(
 		prometheus.BuildFQName(Namespace, "textfile", "mtime_seconds"),
@@ -52,28 +50,20 @@ var (
 )
 
 type textFileCollector struct {
-	logger log.Logger
-
 	path string
 	// Only set for testing to get predictable output.
 	mtime *float64
 }
 
-// newTextFileCollectorFlags ...
-func newTextFileCollectorFlags(app *kingpin.Application) {
-	textFileDirectory = app.Flag(
-		FlagTextFileDirectory,
-		"Directory to read text files with metrics from.",
-	).Default(getDefaultPath()).String()
+func init() {
+	registerCollector("textfile", NewTextFileCollector)
 }
 
-// newTextFileCollector returns a new Collector exposing metrics read from files
+// NewTextFileCollector returns a new Collector exposing metrics read from files
 // in the given textfile directory.
-func newTextFileCollector(logger log.Logger) (Collector, error) {
-	const subsystem = "textfile"
+func NewTextFileCollector() (Collector, error) {
 	return &textFileCollector{
-		logger: log.With(logger, "collector", subsystem),
-		path:   *textFileDirectory,
+		path: *textFileDirectory,
 	}, nil
 }
 
@@ -102,7 +92,7 @@ func duplicateMetricEntry(metricFamilies []*dto.MetricFamily) bool {
 	return false
 }
 
-func (c *textFileCollector) convertMetricFamily(metricFamily *dto.MetricFamily, ch chan<- prometheus.Metric) {
+func convertMetricFamily(metricFamily *dto.MetricFamily, ch chan<- prometheus.Metric) {
 	var valType prometheus.ValueType
 	var val float64
 
@@ -118,7 +108,7 @@ func (c *textFileCollector) convertMetricFamily(metricFamily *dto.MetricFamily, 
 
 	for _, metric := range metricFamily.Metric {
 		if metric.TimestampMs != nil {
-			_ = level.Warn(c.logger).Log("msg", fmt.Sprintf("Ignoring unsupported custom timestamp on textfile collector metric %v", metric))
+			log.Warnf("Ignoring unsupported custom timestamp on textfile collector metric %v", metric)
 		}
 
 		labels := metric.GetLabel()
@@ -188,7 +178,7 @@ func (c *textFileCollector) convertMetricFamily(metricFamily *dto.MetricFamily, 
 				buckets, values...,
 			)
 		default:
-			_ = level.Error(c.logger).Log("msg", "unknown metric type for file")
+			log.Errorf("unknown metric type for file")
 			continue
 		}
 		if metricType == dto.MetricType_GAUGE || metricType == dto.MetricType_COUNTER || metricType == dto.MetricType_UNTYPED {
@@ -256,7 +246,7 @@ func (c *textFileCollector) Collect(ctx *ScrapeContext, ch chan<- prometheus.Met
 	// Iterate over files and accumulate their metrics.
 	files, err := ioutil.ReadDir(c.path)
 	if err != nil && c.path != "" {
-		_ = level.Error(c.logger).Log("msg", fmt.Sprintf("Error reading textfile collector directory %q", c.path), "err", err)
+		log.Errorf("Error reading textfile collector directory %q: %s", c.path, err)
 		error = 1.0
 	}
 
@@ -270,27 +260,27 @@ fileLoop:
 			continue
 		}
 		path := filepath.Join(c.path, f.Name())
-		_ = level.Debug(c.logger).Log("msg", fmt.Sprintf("Processing file %q", path))
+		log.Debugf("Processing file %q", path)
 		file, err := os.Open(path)
 		if err != nil {
-			_ = level.Error(c.logger).Log("msg", fmt.Sprintf("Error opening %q: %v", path, err))
+			log.Errorf("Error opening %q: %v", path, err)
 			error = 1.0
 			continue
 		}
 		var parser expfmt.TextParser
 		r, encoding := utfbom.Skip(carriageReturnFilteringReader{r: file})
 		if err = checkBOM(encoding); err != nil {
-			_ = level.Error(c.logger).Log("msg", fmt.Sprintf("Invalid file encoding detected in %s: %s - file must be UTF8", path, err.Error()))
+			log.Errorf("Invalid file encoding detected in %s: %s - file must be UTF8", path, err.Error())
 			error = 1.0
 			continue
 		}
 		parsedFamilies, err := parser.TextToMetricFamilies(r)
 		closeErr := file.Close()
 		if closeErr != nil {
-			_ = level.Warn(c.logger).Log("msg", fmt.Sprintf("Error closing file"), "err", err)
+			log.Warnf("Error closing file: %v", err)
 		}
 		if err != nil {
-			_ = level.Error(c.logger).Log("msg", fmt.Sprintf("Error parsing %q: %v", path, err))
+			log.Errorf("Error parsing %q: %v", path, err)
 			error = 1.0
 			continue
 		}
@@ -302,7 +292,7 @@ fileLoop:
 			families_array = append(families_array, mf)
 			for _, m := range mf.Metric {
 				if m.TimestampMs != nil {
-					_ = level.Error(c.logger).Log("msg", fmt.Sprintf("Textfile %q contains unsupported client-side timestamps, skipping entire file", path))
+					log.Errorf("Textfile %q contains unsupported client-side timestamps, skipping entire file", path)
 					error = 1.0
 					continue fileLoop
 				}
@@ -315,7 +305,7 @@ fileLoop:
 
 		// If duplicate metrics are detected in a *single* file, skip processing of file metrics
 		if duplicateMetricEntry(families_array) {
-			_ = level.Error(c.logger).Log("msg", fmt.Sprintf("Duplicate metrics detected in file %s. Skipping file processing.", f.Name()))
+			log.Errorf("Duplicate metrics detected in file %s. Skipping file processing.", f.Name())
 			error = 1.0
 			continue
 		}
@@ -331,11 +321,11 @@ fileLoop:
 
 	// If duplicates are detected across *multiple* files, return error.
 	if duplicateMetricEntry(metricFamilies) {
-		_ = level.Error(c.logger).Log("msg", "Duplicate metrics detected across multiple files")
+		log.Errorf("Duplicate metrics detected across multiple files")
 		error = 1.0
 	} else {
 		for _, mf := range metricFamilies {
-			c.convertMetricFamily(mf, ch)
+			convertMetricFamily(mf, ch)
 		}
 	}
 

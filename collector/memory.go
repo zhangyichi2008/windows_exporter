@@ -7,15 +7,16 @@
 package collector
 
 import (
-	"github.com/go-kit/log"
-	"github.com/go-kit/log/level"
+	"github.com/prometheus-community/windows_exporter/log"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
+func init() {
+	registerCollector("memory", NewMemoryCollector, "Memory")
+}
+
 // A MemoryCollector is a Prometheus collector for perflib Memory metrics
 type MemoryCollector struct {
-	logger log.Logger
-
 	AvailableBytes                  *prometheus.Desc
 	CacheBytes                      *prometheus.Desc
 	CacheBytesPeak                  *prometheus.Desc
@@ -50,13 +51,11 @@ type MemoryCollector struct {
 	WriteCopiesTotal                *prometheus.Desc
 }
 
-// newMemoryCollector ...
-func newMemoryCollector(logger log.Logger) (Collector, error) {
+// NewMemoryCollector ...
+func NewMemoryCollector() (Collector, error) {
 	const subsystem = "memory"
 
 	return &MemoryCollector{
-		logger: log.With(logger, "collector", subsystem),
-
 		AvailableBytes: prometheus.NewDesc(
 			prometheus.BuildFQName(Namespace, subsystem, "available_bytes"),
 			"The amount of physical memory immediately available for allocation to a process or for system use. It is equal to the sum of memory assigned to"+
@@ -268,7 +267,7 @@ func newMemoryCollector(logger log.Logger) (Collector, error) {
 // to the provided prometheus Metric channel.
 func (c *MemoryCollector) Collect(ctx *ScrapeContext, ch chan<- prometheus.Metric) error {
 	if desc, err := c.collect(ctx, ch); err != nil {
-		_ = level.Error(c.logger).Log("failed collecting memory metrics", "desc", desc, "err", err)
+		log.Error("failed collecting memory metrics:", desc, err)
 		return err
 	}
 	return nil
@@ -313,7 +312,7 @@ type memory struct {
 
 func (c *MemoryCollector) collect(ctx *ScrapeContext, ch chan<- prometheus.Metric) (*prometheus.Desc, error) {
 	var dst []memory
-	if err := unmarshalObject(ctx.perfObjects["Memory"], &dst, c.logger); err != nil {
+	if err := unmarshalObject(ctx.perfObjects["Memory"], &dst); err != nil {
 		return nil, err
 	}
 

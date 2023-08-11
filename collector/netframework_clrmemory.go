@@ -4,16 +4,17 @@
 package collector
 
 import (
-	"github.com/go-kit/log"
-	"github.com/go-kit/log/level"
+	"github.com/prometheus-community/windows_exporter/log"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/yusufpapurcu/wmi"
 )
 
+func init() {
+	registerCollector("netframework_clrmemory", NewNETFramework_NETCLRMemoryCollector)
+}
+
 // A NETFramework_NETCLRMemoryCollector is a Prometheus collector for WMI Win32_PerfRawData_NETFramework_NETCLRMemory metrics
 type NETFramework_NETCLRMemoryCollector struct {
-	logger log.Logger
-
 	AllocatedBytes                     *prometheus.Desc
 	FinalizationSurvivors              *prometheus.Desc
 	HeapSize                           *prometheus.Desc
@@ -31,11 +32,10 @@ type NETFramework_NETCLRMemoryCollector struct {
 	PromotedMemoryfromGen1             *prometheus.Desc
 }
 
-// newNETFramework_NETCLRMemoryCollector ...
-func newNETFramework_NETCLRMemoryCollector(logger log.Logger) (Collector, error) {
+// NewNETFramework_NETCLRMemoryCollector ...
+func NewNETFramework_NETCLRMemoryCollector() (Collector, error) {
 	const subsystem = "netframework_clrmemory"
 	return &NETFramework_NETCLRMemoryCollector{
-		logger: log.With(logger, "collector", subsystem),
 		AllocatedBytes: prometheus.NewDesc(
 			prometheus.BuildFQName(Namespace, subsystem, "allocated_bytes_total"),
 			"Displays the total number of bytes allocated on the garbage collection heap.",
@@ -115,7 +115,7 @@ func newNETFramework_NETCLRMemoryCollector(logger log.Logger) (Collector, error)
 // to the provided prometheus Metric channel.
 func (c *NETFramework_NETCLRMemoryCollector) Collect(ctx *ScrapeContext, ch chan<- prometheus.Metric) error {
 	if desc, err := c.collect(ch); err != nil {
-		_ = level.Error(c.logger).Log("failed collecting win32_perfrawdata_netframework_netclrmemory metrics", "desc", desc, "err", err)
+		log.Error("failed collecting win32_perfrawdata_netframework_netclrmemory metrics:", desc, err)
 		return err
 	}
 	return nil
@@ -157,7 +157,7 @@ type Win32_PerfRawData_NETFramework_NETCLRMemory struct {
 
 func (c *NETFramework_NETCLRMemoryCollector) collect(ch chan<- prometheus.Metric) (*prometheus.Desc, error) {
 	var dst []Win32_PerfRawData_NETFramework_NETCLRMemory
-	q := queryAll(&dst, c.logger)
+	q := queryAll(&dst)
 	if err := wmi.Query(q, &dst); err != nil {
 		return nil, err
 	}

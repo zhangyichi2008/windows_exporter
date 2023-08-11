@@ -4,77 +4,78 @@
 
 A Prometheus exporter for Windows machines.
 
+**0.22.3 / 2023-08-11**
 
-## Collectors
+**[ADD] 增加对winlogbeat采集事件状态的监控**
 
-Name     | Description | Enabled by default
----------|-------------|--------------------
-[ad](docs/collector.ad.md) | Active Directory Domain Services |
-[adcs](docs/collector.adcs.md) | Active Directory Certificate Services |
-[adfs](docs/collector.adfs.md) | Active Directory Federation Services |
-[cache](docs/collector.cache.md) | Cache metrics |
-[cpu](docs/collector.cpu.md) | CPU usage | &#10003;
-[cpu_info](docs/collector.cpu_info.md) | CPU Information |
-[cs](docs/collector.cs.md) | "Computer System" metrics (system properties, num cpus/total memory) | &#10003;
-[container](docs/collector.container.md) | Container metrics |
-[dfsr](docs/collector.dfsr.md) | DFSR metrics |
-[dhcp](docs/collector.dhcp.md) | DHCP Server |
-[dns](docs/collector.dns.md) | DNS Server |
-[exchange](docs/collector.exchange.md) | Exchange metrics |
-[fsrmquota](docs/collector.fsrmquota.md) | Microsoft File Server Resource Manager (FSRM) Quotas collector |
-[hyperv](docs/collector.hyperv.md) | Hyper-V hosts |
-[iis](docs/collector.iis.md) | IIS sites and applications |
-[logical_disk](docs/collector.logical_disk.md) | Logical disks, disk I/O | &#10003;
-[logon](docs/collector.logon.md) | User logon sessions |
-[memory](docs/collector.memory.md) | Memory usage metrics |
-[mscluster_cluster](docs/collector.mscluster_cluster.md) | MSCluster cluster metrics |
-[mscluster_network](docs/collector.mscluster_network.md) | MSCluster network metrics |
-[mscluster_node](docs/collector.mscluster_node.md) | MSCluster Node metrics |
-[mscluster_resource](docs/collector.mscluster_resource.md) | MSCluster Resource metrics |
-[mscluster_resourcegroup](docs/collector.mscluster_resourcegroup.md) | MSCluster ResourceGroup metrics |
-[msmq](docs/collector.msmq.md) | MSMQ queues |
-[mssql](docs/collector.mssql.md) | [SQL Server Performance Objects](https://docs.microsoft.com/en-us/sql/relational-databases/performance-monitor/use-sql-server-objects#SQLServerPOs) metrics  |
-[netframework_clrexceptions](docs/collector.netframework_clrexceptions.md) | .NET Framework CLR Exceptions |
-[netframework_clrinterop](docs/collector.netframework_clrinterop.md) | .NET Framework Interop Metrics |
-[netframework_clrjit](docs/collector.netframework_clrjit.md) | .NET Framework JIT metrics |
-[netframework_clrloading](docs/collector.netframework_clrloading.md) | .NET Framework CLR Loading metrics |
-[netframework_clrlocksandthreads](docs/collector.netframework_clrlocksandthreads.md) | .NET Framework locks and metrics threads |
-[netframework_clrmemory](docs/collector.netframework_clrmemory.md) |  .NET Framework Memory metrics |
-[netframework_clrremoting](docs/collector.netframework_clrremoting.md) | .NET Framework Remoting metrics |
-[netframework_clrsecurity](docs/collector.netframework_clrsecurity.md) | .NET Framework Security Check metrics |
-[net](docs/collector.net.md) | Network interface I/O | &#10003;
-[os](docs/collector.os.md) | OS metrics (memory, processes, users) | &#10003;
-[process](docs/collector.process.md) | Per-process metrics |
-[remote_fx](docs/collector.remote_fx.md) | RemoteFX protocol (RDP) metrics |
-[scheduled_task](docs/collector.scheduled_task.md) | Scheduled Tasks metrics |
-[service](docs/collector.service.md) | Service state metrics | &#10003;
-[smtp](docs/collector.smtp.md) | IIS SMTP Server |
-[system](docs/collector.system.md) | System calls | &#10003;
-[tcp](docs/collector.tcp.md) | TCP connections |
-[teradici_pcoip](docs/collector.teradici_pcoip.md) | [Teradici PCoIP](https://www.teradici.com/web-help/pcoip_wmi_specs/) session metrics |
-[time](docs/collector.time.md) | Windows Time Service |
-[thermalzone](docs/collector.thermalzone.md) | Thermal information
-[terminal_services](docs/collector.terminal_services.md) | Terminal services (RDS)
-[textfile](docs/collector.textfile.md) | Read prometheus metrics from a text file | &#10003;
-[vmware_blast](docs/collector.vmware_blast.md) | VMware Blast session metrics |
-[vmware](docs/collector.vmware.md) | Performance counters installed by the Vmware Guest agent |
+- HELP windows_winlogbeat_published_events Winlogbeat monitoring log total published events.
+- TYPE windows_winlogbeat_published_events counter
+- windows_winlogbeat_published_events 25
 
-See the linked documentation on each collector for more information on reported metrics, configuration settings and usage examples.
 
-### Filtering enabled collectors
+**0.22.2 / 2023-07-27**
 
-The `windows_exporter` will expose all metrics from enabled collectors by default.  This is the recommended way to collect metrics to avoid errors when comparing metrics of different families.
+**[BUGfix] 优化获取filebeat openfiles信息的方式**
 
-For advanced use the `windows_exporter` can be passed an optional list of collectors to filter metrics. The `collect[]` parameter may be used multiple times. In Prometheus configuration you can use this syntax under the [scrape config](https://prometheus.io/docs/prometheus/latest/configuration/configuration/#<scrape_config>).
 
-```
-  params:
-    collect[]:
-      - foo
-      - bar
-```
+**0.22.1 / 2023-07-25**
 
-This can be useful for having different Prometheus servers collect specific metrics from nodes.
+**[ADD] 增加对filebeat进程状态的监控**
+
+- HELP node_filebeat_up Value is 1 if filebeat process is 'up', 0 otherwise.
+- TYPE node_filebeat_up gauge
+- windows_process_status_up{process_name="filebeat"} 1
+
+**[ADD] 增加对filebeat打开文件状态的监控**
+
+- HELP windows_filebeat_openfiles Filebeat monitoring log harvester openfiles running.
+- TYPE windows_filebeat_openfiles counter
+- windows_filebeat_openfiles 2
+
+
+**[ADD] 增加对winlogbeat进程状态的监控**
+
+- HELP node_rsyslog_up Value is 1 if rsyslog process is 'up', 0 otherwise.
+- TYPE node_rsyslog_up gauge
+- windows_process_status_up{process_name="winlogbeat"} 1
+
+
+**[DEL] 移除以go_开头的33个监控项,具体如下：**
+
+- go_gc_duration_seconds{quantile="0"}
+- go_gc_duration_seconds{quantile="0.25"}
+- go_gc_duration_seconds{quantile="0.5"}
+- go_gc_duration_seconds{quantile="0.75"}
+- go_gc_duration_seconds{quantile="1"}
+- go_gc_duration_seconds_sum
+- go_gc_duration_seconds_count
+- go_goroutines
+- go_info{version="go1.19.1"}
+- go_memstats_alloc_bytes
+- go_memstats_alloc_bytes_total
+- go_memstats_buck_hash_sys_bytes
+- go_memstats_frees_total
+- go_memstats_gc_sys_bytes
+- go_memstats_heap_alloc_bytes
+- go_memstats_heap_idle_bytes
+- go_memstats_heap_inuse_bytes
+- go_memstats_heap_objects
+- go_memstats_heap_released_bytes
+- go_memstats_heap_sys_bytes
+- go_memstats_last_gc_time_seconds
+- go_memstats_lookups_total
+- go_memstats_mallocs_total
+- go_memstats_mcache_inuse_bytes
+- go_memstats_mcache_sys_bytes
+- go_memstats_mspan_inuse_bytes
+- go_memstats_mspan_sys_bytes
+- go_memstats_next_gc_bytes
+- go_memstats_other_sys_bytes
+- go_memstats_stack_inuse_bytes
+- go_memstats_stack_sys_bytes
+- go_memstats_sys_bytes
+- go_threads
+
 
 ## Flags
 
@@ -89,53 +90,7 @@ Flag     | Description | Default value
 `--collectors.print` | If true, print available collectors and exit. |
 `--scrape.timeout-margin` | Seconds to subtract from the timeout allowed by the client. Tune to allow for overhead or high loads. | `0.5`
 `--web.config.file` | A [web config][web_config] for setting up TLS and Auth | None
-`--config.file` | [Using a config file](#using-a-configuration-file) from path or URL | None
-`--config.file.insecure-skip-verify` | Skip TLS when loading config file from URL | false
 
-## Installation
-The latest release can be downloaded from the [releases page](https://github.com/prometheus-community/windows_exporter/releases).
-
-Each release provides a .msi installer. The installer will setup the windows_exporter as a Windows service, as well as create an exception in the Windows Firewall.
-
-If the installer is run without any parameters, the exporter will run with default settings for enabled collectors, ports, etc. The following parameters are available:
-
-Name | Description
------|------------
-`ENABLED_COLLECTORS` | As the `--collectors.enabled` flag, provide a comma-separated list of enabled collectors
-`LISTEN_ADDR` | The IP address to bind to. Defaults to 0.0.0.0
-`LISTEN_PORT` | The port to bind to. Defaults to 9182.
-`METRICS_PATH` | The path at which to serve metrics. Defaults to `/metrics`
-`TEXTFILE_DIR` | As the `--collector.textfile.directory` flag, provide a directory to read text files with metrics from
-`REMOTE_ADDR` | Allows setting comma separated remote IP addresses for the Windows Firewall exception (allow list). Defaults to an empty string (any remote address).
-`EXTRA_FLAGS` | Allows passing full CLI flags. Defaults to an empty string.
-
-Parameters are sent to the installer via `msiexec`. Example invocations:
-
-```powershell
-msiexec /i <path-to-msi-file> ENABLED_COLLECTORS=os,iis LISTEN_PORT=5000
-```
-
-Example service collector with a custom query.
-```powershell
-msiexec /i <path-to-msi-file> ENABLED_COLLECTORS=os,service --% EXTRA_FLAGS="--collector.service.services-where ""Name LIKE 'sql%'"""
-```
-
-On some older versions of Windows you may need to surround parameter values with double quotes to get the install command parsing properly:
-```powershell
-msiexec /i C:\Users\Administrator\Downloads\windows_exporter.msi ENABLED_COLLECTORS="ad,iis,logon,memory,process,tcp,thermalzone" TEXTFILE_DIR="C:\custom_metrics\"
-```
-
-Powershell versions 7.3 and above require [PSNativeCommandArgumentPassing](https://learn.microsoft.com/en-us/powershell/scripting/learn/experimental-features?view=powershell-7.3) to be set to `Legacy` when using `--% EXTRA_FLAGS`:
-
-```powershell
-$PSNativeCommandArgumentPassing = 'Legacy'
-msiexec /i <path-to-msi-file> ENABLED_COLLECTORS=os,service --% EXTRA_FLAGS="--collector.service.services-where ""Name LIKE 'sql%'"""
-```
-
-
-## Kubernetes Implementation
-
-See detailed steps to install on Windows Kubernetes [here](./kubernetes/kubernetes.md).
 
 ## Supported versions
 
@@ -143,41 +98,16 @@ windows_exporter supports Windows Server versions 2008R2 and later, and desktop 
 
 ## Usage
 
-    go get -u github.com/prometheus/promu
-    go get -u github.com/prometheus-community/windows_exporter
-    cd $env:GOPATH/src/github.com/prometheus-community/windows_exporter
-    promu build -v
-    .\windows_exporter.exe
+promu.exe build -v   
+candle.exe -nologo -arch "x64" -ext WixFirewallExtension -ext WixUtilExtension -out .\windows_exporter.wixobj -dVersion="0.22.1" .\windows_exporter.wxs
+light.exe -nologo -spdb -ext WixFirewallExtension -ext WixUtilExtension -out ".\windows_exporter-0.22.1-amd64.msi" .\windows_exporter.wixobj
 
 The prometheus metrics will be exposed on [localhost:9182](http://localhost:9182)
 
-## Examples
-
-### Enable only service collector and specify a custom query
-
-    .\windows_exporter.exe --collectors.enabled "service" --collector.service.services-where "Name='windows_exporter'"
-
-### Enable only process collector and specify a custom query
-
-    .\windows_exporter.exe --collectors.enabled "process" --collector.process.include="firefox.+"
-
-When there are multiple processes with the same name, WMI represents those after the first instance as `process-name#index`. So to get them all, rather than just the first one, the [regular expression](https://en.wikipedia.org/wiki/Regular_expression) must use `.+`. See [process](docs/collector.process.md) for more information.
-
-### Using [defaults] with `--collectors.enabled` argument
-
-Using `[defaults]`  with `--collectors.enabled` argument which gets expanded with all default collectors.
-
-    .\windows_exporter.exe --collectors.enabled "[defaults],process,container"
-
-This enables the additional process and container collectors on top of the defaults.
 
 ### Using a configuration file
 
 YAML configuration files can be specified with the `--config.file` flag. e.g. `.\windows_exporter.exe --config.file=config.yml`. If you are using the absolute path, make sure to quote the path, e.g. `.\windows_exporter.exe --config.file="C:\Program Files\windows_exporter\config.yml"`
-
-It is also possible to load the configuration from a URL. e.g. `.\windows_exporter.exe --config.file="https://example.com/config.yml"`
-
-If you need to skip TLS verification, you can use the `--config.file.insecure-skip-verify` flag. e.g. `.\windows_exporter.exe --config.file="https://example.com/config.yml" --config.file.insecure-skip-verify`
 
 ```yaml
 collectors:
@@ -191,21 +121,4 @@ log:
 
 An example configuration file can be found [here](docs/example_config.yml).
 
-#### Configuration file notes
 
-Configuration file values can be mixed with CLI flags. E.G.
-
-`.\windows_exporter.exe --collectors.enabled=cpu,logon`
-
-```yaml
-log:
-  level: debug
-```
-
-CLI flags enjoy a higher priority over values specified in the configuration file.
-
-## License
-
-Under [MIT](LICENSE)
-
-[web_config]: https://github.com/prometheus/exporter-toolkit/blob/master/docs/web-configuration.md

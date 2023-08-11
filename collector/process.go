@@ -4,41 +4,33 @@
 package collector
 
 import (
-	"errors"
 	"fmt"
 	"regexp"
 	"strconv"
 	"strings"
 
 	"github.com/alecthomas/kingpin/v2"
-	"github.com/go-kit/log"
-	"github.com/go-kit/log/level"
+	"github.com/prometheus-community/windows_exporter/log"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/yusufpapurcu/wmi"
 )
 
-const (
-	FlagProcessOldExclude = "collector.process.blacklist"
-	FlagProcessOldInclude = "collector.process.whitelist"
-
-	FlagProcessExclude = "collector.process.exclude"
-	FlagProcessInclude = "collector.process.include"
-)
+func init() {
+	registerCollector("process", newProcessCollector, "Process")
+}
 
 var (
-	processOldInclude *string
-	processOldExclude *string
-
-	processInclude *string
-	processExclude *string
-
-	processIncludeSet bool
-	processExcludeSet bool
+	processWhitelist = kingpin.Flag(
+		"collector.process.whitelist",
+		"Regexp of processes to include. Process name must both match whitelist and not match blacklist to be included.",
+	).Default(".*").String()
+	processBlacklist = kingpin.Flag(
+		"collector.process.blacklist",
+		"Regexp of processes to exclude. Process name must both match whitelist and not match blacklist to be included.",
+	).Default("").String()
 )
 
 type processCollector struct {
-	logger log.Logger
-
 	StartTime         *prometheus.Desc
 	CPUTimeTotal      *prometheus.Desc
 	HandleCount       *prometheus.Desc
@@ -55,66 +47,19 @@ type processCollector struct {
 	WorkingSetPeak    *prometheus.Desc
 	WorkingSet        *prometheus.Desc
 
-	processIncludePattern *regexp.Regexp
-	processExcludePattern *regexp.Regexp
-}
-
-// newProcessCollectorFlags ...
-func newProcessCollectorFlags(app *kingpin.Application) {
-	processInclude = app.Flag(
-		FlagProcessInclude,
-		"Regexp of processes to include. Process name must both match include and not match exclude to be included.",
-	).Default(".*").PreAction(func(c *kingpin.ParseContext) error {
-		processIncludeSet = true
-		return nil
-	}).String()
-
-	processExclude = app.Flag(
-		FlagProcessExclude,
-		"Regexp of processes to exclude. Process name must both match include and not match exclude to be included.",
-	).Default("").PreAction(func(c *kingpin.ParseContext) error {
-		processExcludeSet = true
-		return nil
-	}).String()
-
-	processOldInclude = app.Flag(
-		FlagProcessOldInclude,
-		"DEPRECATED: Use --collector.process.include",
-	).Hidden().String()
-	processOldExclude = app.Flag(
-		FlagProcessOldExclude,
-		"DEPRECATED: Use --collector.process.exclude",
-	).Hidden().String()
+	processWhitelistPattern *regexp.Regexp
+	processBlacklistPattern *regexp.Regexp
 }
 
 // NewProcessCollector ...
-func newProcessCollector(logger log.Logger) (Collector, error) {
+func newProcessCollector() (Collector, error) {
 	const subsystem = "process"
-	logger = log.With(logger, "collector", subsystem)
 
-	if *processOldExclude != "" {
-		if !processExcludeSet {
-			_ = level.Warn(logger).Log("msg", "--collector.process.blacklist is DEPRECATED and will be removed in a future release, use --collector.process.exclude")
-			*processExclude = *processOldExclude
-		} else {
-			return nil, errors.New("--collector.process.blacklist and --collector.process.exclude are mutually exclusive")
-		}
-	}
-	if *processOldInclude != "" {
-		if !processIncludeSet {
-			_ = level.Warn(logger).Log("msg", "--collector.process.whitelist is DEPRECATED and will be removed in a future release, use --collector.process.include")
-			*processInclude = *processOldInclude
-		} else {
-			return nil, errors.New("--collector.process.whitelist and --collector.process.include are mutually exclusive")
-		}
-	}
-
-	if *processInclude == ".*" && *processExclude == "" {
-		_ = level.Warn(logger).Log("msg", "No filters specified for process collector. This will generate a very large number of metrics!")
+	if *processWhitelist == ".*" && *processBlacklist == "" {
+		log.Warn("No filters specified for process collector. This will generate a very large number of metrics!")
 	}
 
 	return &processCollector{
-		logger: logger,
 		StartTime: prometheus.NewDesc(
 			prometheus.BuildFQName(Namespace, subsystem, "start_time"),
 			"Time of process start.",
@@ -205,8 +150,8 @@ func newProcessCollector(logger log.Logger) (Collector, error) {
 			[]string{"process", "process_id", "creating_process_id"},
 			nil,
 		),
-		processIncludePattern: regexp.MustCompile(fmt.Sprintf("^(?:%s)$", *processInclude)),
-		processExcludePattern: regexp.MustCompile(fmt.Sprintf("^(?:%s)$", *processExclude)),
+		processWhitelistPattern: regexp.MustCompile(fmt.Sprintf("^(?:%s)$", *processWhitelist)),
+		processBlacklistPattern: regexp.MustCompile(fmt.Sprintf("^(?:%s)$", *processBlacklist)),
 	}, nil
 }
 
@@ -249,21 +194,21 @@ type WorkerProcess struct {
 
 func (c *processCollector) Collect(ctx *ScrapeContext, ch chan<- prometheus.Metric) error {
 	data := make([]perflibProcess, 0)
-	err := unmarshalObject(ctx.perfObjects["Process"], &data, c.logger)
+	err := unmarshalObject(ctx.perfObjects["Process"], &data)
 	if err != nil {
 		return err
 	}
 
 	var dst_wp []WorkerProcess
-	q_wp := queryAll(&dst_wp, c.logger)
+	q_wp := queryAll(&dst_wp)
 	if err := wmi.QueryNamespace(q_wp, &dst_wp, "root\\WebAdministration"); err != nil {
-		_ = level.Debug(c.logger).Log("msg", fmt.Sprintf("Could not query WebAdministration namespace for IIS worker processes: %v. Skipping", err))
+		log.Debugf("Could not query WebAdministration namespace for IIS worker processes: %v. Skipping", err)
 	}
 
 	for _, process := range data {
 		if process.Name == "_Total" ||
-			c.processExcludePattern.MatchString(process.Name) ||
-			!c.processIncludePattern.MatchString(process.Name) {
+			c.processBlacklistPattern.MatchString(process.Name) ||
+			!c.processWhitelistPattern.MatchString(process.Name) {
 			continue
 		}
 		// Duplicate processes are suffixed # and an index number. Remove those.

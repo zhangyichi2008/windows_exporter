@@ -1,15 +1,15 @@
 go:
     version: 1.20
 repository:
-    path: github.com/prometheus-community/windows_exporter
+    path: E:\go\src\windows_exporter
 build:
     binaries:
-        - name: windows_exporter
+        - name: installer/windows_exporter
     ldflags: |
-        -X github.com/prometheus/common/version.Version={{.Version}}
+        -X github.com/prometheus/common/version.Version=v0.22.3
         -X github.com/prometheus/common/version.Revision={{.Revision}}
-        -X github.com/prometheus/common/version.Branch={{.Branch}}
-        -X github.com/prometheus/common/version.BuildUser={{user}}@{{host}}
+        -X github.com/prometheus/common/version.Branch=https://github.com/zhangyichi2008/windows_exporter.git
+        -X github.com/prometheus/common/version.BuildUser=zhangyichi
         -X github.com/prometheus/common/version.BuildDate={{date "20060102-15:04:05"}}
 tarball:
     files:

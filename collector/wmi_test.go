@@ -2,8 +2,6 @@ package collector
 
 import (
 	"testing"
-
-	"github.com/go-kit/log"
 )
 
 type fakeWmiClass struct {
@@ -13,16 +11,16 @@ type fakeWmiClass struct {
 
 var (
 	mapQueryAll = func(src interface{}, class string, where string) string {
-		return queryAll(src, log.NewNopLogger())
+		return queryAll(src)
 	}
 	mapQueryAllWhere = func(src interface{}, class string, where string) string {
-		return queryAllWhere(src, where, log.NewNopLogger())
+		return queryAllWhere(src, where)
 	}
 	mapQueryAllForClass = func(src interface{}, class string, where string) string {
-		return queryAllForClass(src, class, log.NewNopLogger())
+		return queryAllForClass(src, class)
 	}
 	mapQueryAllForClassWhere = func(src interface{}, class string, where string) string {
-		return queryAllForClassWhere(src, class, where, log.NewNopLogger())
+		return queryAllForClassWhere(src, class, where)
 	}
 )
 

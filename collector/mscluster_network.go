@@ -1,15 +1,16 @@
 package collector
 
 import (
-	"github.com/go-kit/log"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/yusufpapurcu/wmi"
 )
 
+func init() {
+	registerCollector("mscluster_network", newMSCluster_NetworkCollector)
+}
+
 // A MSCluster_NetworkCollector is a Prometheus collector for WMI MSCluster_Network metrics
 type MSCluster_NetworkCollector struct {
-	logger log.Logger
-
 	Characteristics *prometheus.Desc
 	Flags           *prometheus.Desc
 	Metric          *prometheus.Desc
@@ -17,11 +18,9 @@ type MSCluster_NetworkCollector struct {
 	State           *prometheus.Desc
 }
 
-func newMSCluster_NetworkCollector(logger log.Logger) (Collector, error) {
+func newMSCluster_NetworkCollector() (Collector, error) {
 	const subsystem = "mscluster_network"
 	return &MSCluster_NetworkCollector{
-		logger: log.With(logger, "collector", subsystem),
-
 		Characteristics: prometheus.NewDesc(
 			prometheus.BuildFQName(Namespace, subsystem, "characteristics"),
 			"Provides the characteristics of the network.",
@@ -71,7 +70,7 @@ type MSCluster_Network struct {
 // to the provided prometheus Metric channel.
 func (c *MSCluster_NetworkCollector) Collect(ctx *ScrapeContext, ch chan<- prometheus.Metric) error {
 	var dst []MSCluster_Network
-	q := queryAll(&dst, c.logger)
+	q := queryAll(&dst)
 	if err := wmi.QueryNamespace(q, &dst, "root/MSCluster"); err != nil {
 		return err
 	}

@@ -4,16 +4,17 @@
 package collector
 
 import (
-	"github.com/go-kit/log"
-	"github.com/go-kit/log/level"
+	"github.com/prometheus-community/windows_exporter/log"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/yusufpapurcu/wmi"
 )
 
+func init() {
+	registerCollector("netframework_clrloading", NewNETFramework_NETCLRLoadingCollector)
+}
+
 // A NETFramework_NETCLRLoadingCollector is a Prometheus collector for WMI Win32_PerfRawData_NETFramework_NETCLRLoading metrics
 type NETFramework_NETCLRLoadingCollector struct {
-	logger log.Logger
-
 	BytesinLoaderHeap         *prometheus.Desc
 	Currentappdomains         *prometheus.Desc
 	CurrentAssemblies         *prometheus.Desc
@@ -25,11 +26,10 @@ type NETFramework_NETCLRLoadingCollector struct {
 	TotalNumberofLoadFailures *prometheus.Desc
 }
 
-// newNETFramework_NETCLRLoadingCollector ...
-func newNETFramework_NETCLRLoadingCollector(logger log.Logger) (Collector, error) {
+// NewNETFramework_NETCLRLoadingCollector ...
+func NewNETFramework_NETCLRLoadingCollector() (Collector, error) {
 	const subsystem = "netframework_clrloading"
 	return &NETFramework_NETCLRLoadingCollector{
-		logger: log.With(logger, "collector", subsystem),
 		BytesinLoaderHeap: prometheus.NewDesc(
 			prometheus.BuildFQName(Namespace, subsystem, "loader_heap_size_bytes"),
 			"Displays the current size, in bytes, of the memory committed by the class loader across all application domains. Committed memory is the physical space reserved in the disk paging file.",
@@ -91,7 +91,7 @@ func newNETFramework_NETCLRLoadingCollector(logger log.Logger) (Collector, error
 // to the provided prometheus Metric channel.
 func (c *NETFramework_NETCLRLoadingCollector) Collect(ctx *ScrapeContext, ch chan<- prometheus.Metric) error {
 	if desc, err := c.collect(ch); err != nil {
-		_ = level.Error(c.logger).Log("failed collecting win32_perfrawdata_netframework_netclrloading metrics", "desc", desc, "err", err)
+		log.Error("failed collecting win32_perfrawdata_netframework_netclrloading metrics:", desc, err)
 		return err
 	}
 	return nil
@@ -120,7 +120,7 @@ type Win32_PerfRawData_NETFramework_NETCLRLoading struct {
 
 func (c *NETFramework_NETCLRLoadingCollector) collect(ch chan<- prometheus.Metric) (*prometheus.Desc, error) {
 	var dst []Win32_PerfRawData_NETFramework_NETCLRLoading
-	q := queryAll(&dst, c.logger)
+	q := queryAll(&dst)
 	if err := wmi.Query(q, &dst); err != nil {
 		return nil, err
 	}

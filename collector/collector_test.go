@@ -4,7 +4,6 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/go-kit/log"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -36,14 +35,14 @@ func TestExpandChildCollectors(t *testing.T) {
 	}
 }
 
-func benchmarkCollector(b *testing.B, name string, collectFunc func(logger log.Logger) (Collector, error)) {
+func benchmarkCollector(b *testing.B, name string, collectFunc func() (Collector, error)) {
 	// Create perflib scrape context. Some perflib collectors required a correct context,
 	// or will fail during benchmark.
 	scrapeContext, err := PrepareScrapeContext([]string{name})
 	if err != nil {
 		b.Error(err)
 	}
-	c, err := collectFunc(log.NewNopLogger())
+	c, err := collectFunc()
 	if err != nil {
 		b.Error(err)
 	}

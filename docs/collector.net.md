@@ -11,13 +11,13 @@ Enabled by default? | Yes
 
 ## Flags
 
-### `--collector.net.nic-include`
+### `--collector.net.nic-whitelist`
 
-If given, an interface name needs to match the include regexp in order for the corresponding metrics to be reported
+If given, an interface name needs to match the whitelist regexp in order for the corresponding metrics to be reported
 
-### `--collector.net.nic-exclude`
+### `--collector.net.nic-blacklist`
 
-If given, an interface name needs to *not* match the exclude regexp in order for the corresponding metrics to be reported
+If given, an interface name needs to *not* match the blacklist regexp in order for the corresponding metrics to be reported
 
 ## Metrics
 

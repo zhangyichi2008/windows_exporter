@@ -4,48 +4,36 @@
 package collector
 
 import (
-	"errors"
 	"fmt"
 	"regexp"
 	"runtime"
 	"strings"
 
 	"github.com/alecthomas/kingpin/v2"
-	"github.com/go-kit/log"
-	"github.com/go-kit/log/level"
 	ole "github.com/go-ole/go-ole"
 	"github.com/go-ole/go-ole/oleutil"
+	"github.com/prometheus-community/windows_exporter/log"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-const (
-	FlagScheduledTaskOldExclude = "collector.scheduled_task.blacklist"
-	FlagScheduledTaskOldInclude = "collector.scheduled_task.whitelist"
-
-	FlagScheduledTaskExclude = "collector.scheduled_task.exclude"
-	FlagScheduledTaskInclude = "collector.scheduled_task.include"
-)
-
 var (
-	taskOldExclude *string
-	taskOldInclude *string
-
-	taskExclude *string
-	taskInclude *string
-
-	taskIncludeSet bool
-	taskExcludeSet bool
+	taskWhitelist = kingpin.Flag(
+		"collector.scheduled_task.whitelist",
+		"Regexp of tasks to whitelist. Task path must both match whitelist and not match blacklist to be included.",
+	).Default(".+").String()
+	taskBlacklist = kingpin.Flag(
+		"collector.scheduled_task.blacklist",
+		"Regexp of tasks to blacklist. Task path must both match whitelist and not match blacklist to be included.",
+	).String()
 )
 
 type ScheduledTaskCollector struct {
-	logger log.Logger
-
 	LastResult *prometheus.Desc
 	MissedRuns *prometheus.Desc
 	State      *prometheus.Desc
 
-	taskIncludePattern *regexp.Regexp
-	taskExcludePattern *regexp.Regexp
+	taskWhitelistPattern *regexp.Regexp
+	taskBlacklistPattern *regexp.Regexp
 }
 
 // TaskState ...
@@ -75,55 +63,13 @@ type ScheduledTask struct {
 
 type ScheduledTasks []ScheduledTask
 
-// newScheduledTask ...
-func newScheduledTaskFlags(app *kingpin.Application) {
-	taskInclude = app.Flag(
-		FlagScheduledTaskInclude,
-		"Regexp of tasks to include. Task path must both match include and not match exclude to be included.",
-	).Default(".+").PreAction(func(c *kingpin.ParseContext) error {
-		taskIncludeSet = true
-		return nil
-	}).String()
-
-	taskExclude = app.Flag(
-		FlagScheduledTaskExclude,
-		"Regexp of tasks to exclude. Task path must both match include and not match exclude to be included.",
-	).Default("").PreAction(func(c *kingpin.ParseContext) error {
-		taskExcludeSet = true
-		return nil
-	}).String()
-
-	taskOldInclude = app.Flag(
-		FlagScheduledTaskOldInclude,
-		"DEPRECATED: Use --collector.scheduled_task.include",
-	).Hidden().String()
-	taskOldExclude = app.Flag(
-		FlagScheduledTaskOldExclude,
-		"DEPRECATED: Use --collector.scheduled_task.exclude",
-	).Hidden().String()
+func init() {
+	registerCollector("scheduled_task", NewScheduledTask)
 }
 
-// newScheduledTask ...
-func newScheduledTask(logger log.Logger) (Collector, error) {
+// NewScheduledTask ...
+func NewScheduledTask() (Collector, error) {
 	const subsystem = "scheduled_task"
-	logger = log.With(logger, "collector", subsystem)
-
-	if *taskOldExclude != "" {
-		if !taskExcludeSet {
-			_ = level.Warn(logger).Log("msg", "--collector.scheduled_task.blacklist is DEPRECATED and will be removed in a future release, use --collector.scheduled_task.exclude")
-			*taskExclude = *taskOldExclude
-		} else {
-			return nil, errors.New("--collector.scheduled_task.blacklist and --collector.scheduled_task.exclude are mutually exclusive")
-		}
-	}
-	if *taskOldInclude != "" {
-		if !taskIncludeSet {
-			_ = level.Warn(logger).Log("msg", "--collector.scheduled_task.whitelist is DEPRECATED and will be removed in a future release, use --collector.scheduled_task.include")
-			*taskInclude = *taskOldInclude
-		} else {
-			return nil, errors.New("--collector.scheduled_task.whitelist and --collector.scheduled_task.include are mutually exclusive")
-		}
-	}
 
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
@@ -138,7 +84,6 @@ func newScheduledTask(logger log.Logger) (Collector, error) {
 	defer ole.CoUninitialize()
 
 	return &ScheduledTaskCollector{
-		logger: logger,
 		LastResult: prometheus.NewDesc(
 			prometheus.BuildFQName(Namespace, subsystem, "last_result"),
 			"The result that was returned the last time the registered task was run",
@@ -160,14 +105,14 @@ func newScheduledTask(logger log.Logger) (Collector, error) {
 			nil,
 		),
 
-		taskIncludePattern: regexp.MustCompile(fmt.Sprintf("^(?:%s)$", *taskInclude)),
-		taskExcludePattern: regexp.MustCompile(fmt.Sprintf("^(?:%s)$", *taskExclude)),
+		taskWhitelistPattern: regexp.MustCompile(fmt.Sprintf("^(?:%s)$", *taskWhitelist)),
+		taskBlacklistPattern: regexp.MustCompile(fmt.Sprintf("^(?:%s)$", *taskBlacklist)),
 	}, nil
 }
 
 func (c *ScheduledTaskCollector) Collect(ctx *ScrapeContext, ch chan<- prometheus.Metric) error {
 	if desc, err := c.collect(ch); err != nil {
-		_ = level.Error(c.logger).Log("failed collecting user metrics", "desc", desc, "err", err)
+		log.Error("failed collecting user metrics:", desc, err)
 		return err
 	}
 
@@ -183,8 +128,8 @@ func (c *ScheduledTaskCollector) collect(ch chan<- prometheus.Metric) (*promethe
 	}
 
 	for _, task := range scheduledTasks {
-		if c.taskExcludePattern.MatchString(task.Path) ||
-			!c.taskIncludePattern.MatchString(task.Path) {
+		if c.taskBlacklistPattern.MatchString(task.Path) ||
+			!c.taskWhitelistPattern.MatchString(task.Path) {
 			continue
 		}
 

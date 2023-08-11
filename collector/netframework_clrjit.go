@@ -4,27 +4,27 @@
 package collector
 
 import (
-	"github.com/go-kit/log"
-	"github.com/go-kit/log/level"
+	"github.com/prometheus-community/windows_exporter/log"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/yusufpapurcu/wmi"
 )
 
+func init() {
+	registerCollector("netframework_clrjit", NewNETFramework_NETCLRJitCollector)
+}
+
 // A NETFramework_NETCLRJitCollector is a Prometheus collector for WMI Win32_PerfRawData_NETFramework_NETCLRJit metrics
 type NETFramework_NETCLRJitCollector struct {
-	logger log.Logger
-
 	NumberofMethodsJitted      *prometheus.Desc
 	TimeinJit                  *prometheus.Desc
 	StandardJitFailures        *prometheus.Desc
 	TotalNumberofILBytesJitted *prometheus.Desc
 }
 
-// newNETFramework_NETCLRJitCollector ...
-func newNETFramework_NETCLRJitCollector(logger log.Logger) (Collector, error) {
+// NewNETFramework_NETCLRJitCollector ...
+func NewNETFramework_NETCLRJitCollector() (Collector, error) {
 	const subsystem = "netframework_clrjit"
 	return &NETFramework_NETCLRJitCollector{
-		logger: log.With(logger, "collector", subsystem),
 		NumberofMethodsJitted: prometheus.NewDesc(
 			prometheus.BuildFQName(Namespace, subsystem, "jit_methods_total"),
 			"Displays the total number of methods JIT-compiled since the application started. This counter does not include pre-JIT-compiled methods.",
@@ -56,7 +56,7 @@ func newNETFramework_NETCLRJitCollector(logger log.Logger) (Collector, error) {
 // to the provided prometheus Metric channel.
 func (c *NETFramework_NETCLRJitCollector) Collect(ctx *ScrapeContext, ch chan<- prometheus.Metric) error {
 	if desc, err := c.collect(ch); err != nil {
-		_ = level.Error(c.logger).Log("failed collecting win32_perfrawdata_netframework_netclrjit metrics", "desc", desc, "err", err)
+		log.Error("failed collecting win32_perfrawdata_netframework_netclrjit metrics:", desc, err)
 		return err
 	}
 	return nil
@@ -76,7 +76,7 @@ type Win32_PerfRawData_NETFramework_NETCLRJit struct {
 
 func (c *NETFramework_NETCLRJitCollector) collect(ch chan<- prometheus.Metric) (*prometheus.Desc, error) {
 	var dst []Win32_PerfRawData_NETFramework_NETCLRJit
-	q := queryAll(&dst, c.logger)
+	q := queryAll(&dst)
 	if err := wmi.Query(q, &dst); err != nil {
 		return nil, err
 	}

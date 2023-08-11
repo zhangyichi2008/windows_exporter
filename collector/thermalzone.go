@@ -3,26 +3,26 @@ package collector
 import (
 	"errors"
 
-	"github.com/go-kit/log"
-	"github.com/go-kit/log/level"
+	"github.com/prometheus-community/windows_exporter/log"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/yusufpapurcu/wmi"
 )
 
+func init() {
+	registerCollector("thermalzone", NewThermalZoneCollector)
+}
+
 // A thermalZoneCollector is a Prometheus collector for WMI Win32_PerfRawData_Counters_ThermalZoneInformation metrics
 type thermalZoneCollector struct {
-	logger log.Logger
-
 	PercentPassiveLimit *prometheus.Desc
 	Temperature         *prometheus.Desc
 	ThrottleReasons     *prometheus.Desc
 }
 
-// newThermalZoneCollector ...
-func newThermalZoneCollector(logger log.Logger) (Collector, error) {
+// NewThermalZoneCollector ...
+func NewThermalZoneCollector() (Collector, error) {
 	const subsystem = "thermalzone"
 	return &thermalZoneCollector{
-		logger: log.With(logger, "collector", subsystem),
 		Temperature: prometheus.NewDesc(
 			prometheus.BuildFQName(Namespace, subsystem, "temperature_celsius"),
 			"(Temperature)",
@@ -54,7 +54,7 @@ func newThermalZoneCollector(logger log.Logger) (Collector, error) {
 // to the provided prometheus Metric channel.
 func (c *thermalZoneCollector) Collect(ctx *ScrapeContext, ch chan<- prometheus.Metric) error {
 	if desc, err := c.collect(ch); err != nil {
-		_ = level.Error(c.logger).Log("failed collecting thermalzone metrics", "desc", desc, "err", err)
+		log.Error("failed collecting thermalzone metrics:", desc, err)
 		return err
 	}
 	return nil
@@ -72,7 +72,7 @@ type Win32_PerfRawData_Counters_ThermalZoneInformation struct {
 
 func (c *thermalZoneCollector) collect(ch chan<- prometheus.Metric) (*prometheus.Desc, error) {
 	var dst []Win32_PerfRawData_Counters_ThermalZoneInformation
-	q := queryAll(&dst, c.logger)
+	q := queryAll(&dst)
 	if err := wmi.Query(q, &dst); err != nil {
 		return nil, err
 	}

@@ -4,15 +4,16 @@
 package collector
 
 import (
-	"github.com/go-kit/log"
-	"github.com/go-kit/log/level"
+	"github.com/prometheus-community/windows_exporter/log"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
+func init() {
+	registerCollector("system", NewSystemCollector, "System")
+}
+
 // A SystemCollector is a Prometheus collector for WMI metrics
 type SystemCollector struct {
-	logger log.Logger
-
 	ContextSwitchesTotal     *prometheus.Desc
 	ExceptionDispatchesTotal *prometheus.Desc
 	ProcessorQueueLength     *prometheus.Desc
@@ -21,12 +22,11 @@ type SystemCollector struct {
 	Threads                  *prometheus.Desc
 }
 
-// newSystemCollector ...
-func newSystemCollector(logger log.Logger) (Collector, error) {
+// NewSystemCollector ...
+func NewSystemCollector() (Collector, error) {
 	const subsystem = "system"
 
 	return &SystemCollector{
-		logger: log.With(logger, "collector", subsystem),
 		ContextSwitchesTotal: prometheus.NewDesc(
 			prometheus.BuildFQName(Namespace, subsystem, "context_switches_total"),
 			"Total number of context switches (WMI source: PerfOS_System.ContextSwitchesPersec)",
@@ -70,7 +70,7 @@ func newSystemCollector(logger log.Logger) (Collector, error) {
 // to the provided prometheus Metric channel.
 func (c *SystemCollector) Collect(ctx *ScrapeContext, ch chan<- prometheus.Metric) error {
 	if desc, err := c.collect(ctx, ch); err != nil {
-		_ = level.Error(c.logger).Log("failed collecting system metrics", "desc", desc, "err", err)
+		log.Error("failed collecting system metrics:", desc, err)
 		return err
 	}
 	return nil
@@ -89,7 +89,7 @@ type system struct {
 
 func (c *SystemCollector) collect(ctx *ScrapeContext, ch chan<- prometheus.Metric) (*prometheus.Desc, error) {
 	var dst []system
-	if err := unmarshalObject(ctx.perfObjects["System"], &dst, c.logger); err != nil {
+	if err := unmarshalObject(ctx.perfObjects["System"], &dst); err != nil {
 		return nil, err
 	}
 

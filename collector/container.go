@@ -4,19 +4,17 @@
 package collector
 
 import (
-	"fmt"
-	"strings"
-
 	"github.com/Microsoft/hcsshim"
-	"github.com/go-kit/log"
-	"github.com/go-kit/log/level"
+	"github.com/prometheus-community/windows_exporter/log"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
+func init() {
+	registerCollector("container", NewContainerMetricsCollector)
+}
+
 // A ContainerMetricsCollector is a Prometheus collector for containers metrics
 type ContainerMetricsCollector struct {
-	logger log.Logger
-
 	// Presence
 	ContainerAvailable *prometheus.Desc
 
@@ -47,12 +45,10 @@ type ContainerMetricsCollector struct {
 	WriteSizeBytes       *prometheus.Desc
 }
 
-// newContainerMetricsCollector constructs a new ContainerMetricsCollector
-func newContainerMetricsCollector(logger log.Logger) (Collector, error) {
+// NewContainerMetricsCollector constructs a new ContainerMetricsCollector
+func NewContainerMetricsCollector() (Collector, error) {
 	const subsystem = "container"
 	return &ContainerMetricsCollector{
-		logger: log.With(logger, "collector", subsystem),
-
 		ContainerAvailable: prometheus.NewDesc(
 			prometheus.BuildFQName(Namespace, subsystem, "available"),
 			"Available",
@@ -168,17 +164,17 @@ func newContainerMetricsCollector(logger log.Logger) (Collector, error) {
 // to the provided prometheus Metric channel.
 func (c *ContainerMetricsCollector) Collect(ctx *ScrapeContext, ch chan<- prometheus.Metric) error {
 	if desc, err := c.collect(ch); err != nil {
-		_ = level.Error(c.logger).Log("msg", "failed collecting ContainerMetricsCollector metrics", "desc", desc, "err", err)
+		log.Error("failed collecting ContainerMetricsCollector metrics:", desc, err)
 		return err
 	}
 	return nil
 }
 
 // containerClose closes the container resource
-func (c *ContainerMetricsCollector) containerClose(container hcsshim.Container) {
-	err := container.Close()
+func containerClose(c hcsshim.Container) {
+	err := c.Close()
 	if err != nil {
-		_ = level.Error(c.logger).Log("err", err)
+		log.Error(err)
 	}
 }
 
@@ -187,7 +183,7 @@ func (c *ContainerMetricsCollector) collect(ch chan<- prometheus.Metric) (*prome
 	// Types Container is passed to get the containers compute systems only
 	containers, err := hcsshim.GetContainers(hcsshim.ComputeSystemQuery{Types: []string{"Container"}})
 	if err != nil {
-		_ = level.Error(c.logger).Log("msg", "Err in Getting containers", "err", err)
+		log.Error("Err in Getting containers:", err)
 		return nil, err
 	}
 
@@ -202,26 +198,22 @@ func (c *ContainerMetricsCollector) collect(ch chan<- prometheus.Metric) (*prome
 		return nil, nil
 	}
 
-	containerPrefixes := make(map[string]string)
-
 	for _, containerDetails := range containers {
 		container, err := hcsshim.OpenContainer(containerDetails.ID)
 		if container != nil {
-			defer c.containerClose(container)
+			defer containerClose(container)
 		}
 		if err != nil {
-			_ = level.Error(c.logger).Log("msg", "err in opening container", "containerId", containerDetails.ID, "err", err)
+			log.Error("err in opening container: ", containerDetails.ID, err)
 			continue
 		}
 
 		cstats, err := container.Statistics()
 		if err != nil {
-			_ = level.Error(c.logger).Log("msg", "err in fetching container Statistics", "containerId", containerDetails.ID, "err", err)
+			log.Error("err in fetching container Statistics: ", containerDetails.ID, err)
 			continue
 		}
-
 		containerIdWithPrefix := getContainerIdWithPrefix(containerDetails)
-		containerPrefixes[containerDetails.ID] = containerIdWithPrefix
 
 		ch <- prometheus.MustNewConstMetric(
 			c.ContainerAvailable,
@@ -265,6 +257,54 @@ func (c *ContainerMetricsCollector) collect(ch chan<- prometheus.Metric) (*prome
 			float64(cstats.Processor.RuntimeKernel100ns)*ticksToSecondsScaleFactor,
 			containerIdWithPrefix,
 		)
+
+		if len(cstats.Network) == 0 {
+			log.Info("No Network Stats for container: ", containerDetails.ID)
+			continue
+		}
+
+		networkStats := cstats.Network
+
+		for _, networkInterface := range networkStats {
+			ch <- prometheus.MustNewConstMetric(
+				c.BytesReceived,
+				prometheus.CounterValue,
+				float64(networkInterface.BytesReceived),
+				containerIdWithPrefix, networkInterface.EndpointId,
+			)
+			ch <- prometheus.MustNewConstMetric(
+				c.BytesSent,
+				prometheus.CounterValue,
+				float64(networkInterface.BytesSent),
+				containerIdWithPrefix, networkInterface.EndpointId,
+			)
+			ch <- prometheus.MustNewConstMetric(
+				c.PacketsReceived,
+				prometheus.CounterValue,
+				float64(networkInterface.PacketsReceived),
+				containerIdWithPrefix, networkInterface.EndpointId,
+			)
+			ch <- prometheus.MustNewConstMetric(
+				c.PacketsSent,
+				prometheus.CounterValue,
+				float64(networkInterface.PacketsSent),
+				containerIdWithPrefix, networkInterface.EndpointId,
+			)
+			ch <- prometheus.MustNewConstMetric(
+				c.DroppedPacketsIncoming,
+				prometheus.CounterValue,
+				float64(networkInterface.DroppedPacketsIncoming),
+				containerIdWithPrefix, networkInterface.EndpointId,
+			)
+			ch <- prometheus.MustNewConstMetric(
+				c.DroppedPacketsOutgoing,
+				prometheus.CounterValue,
+				float64(networkInterface.DroppedPacketsOutgoing),
+				containerIdWithPrefix, networkInterface.EndpointId,
+			)
+			break
+		}
+
 		ch <- prometheus.MustNewConstMetric(
 			c.ReadCountNormalized,
 			prometheus.CounterValue,
@@ -289,73 +329,6 @@ func (c *ContainerMetricsCollector) collect(ch chan<- prometheus.Metric) (*prome
 			float64(cstats.Storage.WriteSizeBytes),
 			containerIdWithPrefix,
 		)
-	}
-
-	hnsEndpoints, err := hcsshim.HNSListEndpointRequest()
-	if err != nil {
-		_ = level.Warn(c.logger).Log("msg", "Failed to collect network stats for containers")
-		return nil, nil
-	}
-
-	if len(hnsEndpoints) == 0 {
-		_ = level.Info(c.logger).Log("msg", fmt.Sprintf("No network stats for containers to collect"))
-		return nil, nil
-	}
-
-	for _, endpoint := range hnsEndpoints {
-		endpointStats, err := hcsshim.GetHNSEndpointStats(endpoint.Id)
-		if err != nil {
-			_ = level.Warn(c.logger).Log("msg", fmt.Sprintf("Failed to collect network stats for interface %s", endpoint.Id), "err", err)
-			continue
-		}
-
-		for _, containerId := range endpoint.SharedContainers {
-			containerIdWithPrefix, ok := containerPrefixes[containerId]
-			endpointId := strings.ToUpper(endpoint.Id)
-
-			if !ok {
-				_ = level.Warn(c.logger).Log("msg", fmt.Sprintf("Failed to collect network stats for container %s", containerId))
-				continue
-			}
-
-			ch <- prometheus.MustNewConstMetric(
-				c.BytesReceived,
-				prometheus.CounterValue,
-				float64(endpointStats.BytesReceived),
-				containerIdWithPrefix, endpointId,
-			)
-
-			ch <- prometheus.MustNewConstMetric(
-				c.BytesSent,
-				prometheus.CounterValue,
-				float64(endpointStats.BytesSent),
-				containerIdWithPrefix, endpointId,
-			)
-			ch <- prometheus.MustNewConstMetric(
-				c.PacketsReceived,
-				prometheus.CounterValue,
-				float64(endpointStats.PacketsReceived),
-				containerIdWithPrefix, endpointId,
-			)
-			ch <- prometheus.MustNewConstMetric(
-				c.PacketsSent,
-				prometheus.CounterValue,
-				float64(endpointStats.PacketsSent),
-				containerIdWithPrefix, endpointId,
-			)
-			ch <- prometheus.MustNewConstMetric(
-				c.DroppedPacketsIncoming,
-				prometheus.CounterValue,
-				float64(endpointStats.DroppedPacketsIncoming),
-				containerIdWithPrefix, endpointId,
-			)
-			ch <- prometheus.MustNewConstMetric(
-				c.DroppedPacketsOutgoing,
-				prometheus.CounterValue,
-				float64(endpointStats.DroppedPacketsOutgoing),
-				containerIdWithPrefix, endpointId,
-			)
-		}
 	}
 
 	return nil, nil

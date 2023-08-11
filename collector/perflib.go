@@ -6,14 +6,15 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/prometheus-community/windows_exporter/perflib"
-
-	"github.com/go-kit/log"
-	"github.com/go-kit/log/level"
+	perflibCollector "github.com/leoluk/perflib_exporter/collector"
+	"github.com/leoluk/perflib_exporter/perflib"
+	"github.com/prometheus-community/windows_exporter/log"
 )
 
+var nametable = perflib.QueryNameTable("Counter 009") // Reads the names in English TODO: validate that the English names are always present
+
 func MapCounterToIndex(name string) string {
-	return strconv.Itoa(int(perflib.CounterNameTable.LookupIndex(name)))
+	return strconv.Itoa(int(nametable.LookupIndex(name)))
 }
 
 func getPerflibSnapshot(objNames string) (map[string]*perflib.PerfObject, error) {
@@ -29,7 +30,7 @@ func getPerflibSnapshot(objNames string) (map[string]*perflib.PerfObject, error)
 	return indexed, nil
 }
 
-func unmarshalObject(obj *perflib.PerfObject, vs interface{}, logger log.Logger) error {
+func unmarshalObject(obj *perflib.PerfObject, vs interface{}) error {
 	if obj == nil {
 		return fmt.Errorf("counter not found")
 	}
@@ -80,7 +81,7 @@ func unmarshalObject(obj *perflib.PerfObject, vs interface{}, logger log.Logger)
 
 			ctr, found := counters[tag]
 			if !found {
-				_ = level.Debug(logger).Log("msg", fmt.Sprintf("missing counter %q, have %v", tag, counterMapKeys(counters)))
+				log.Debugf("missing counter %q, have %v", tag, counterMapKeys(counters))
 				continue
 			}
 			if !target.Field(i).CanSet() {
@@ -99,9 +100,9 @@ func unmarshalObject(obj *perflib.PerfObject, vs interface{}, logger log.Logger)
 			}
 
 			switch ctr.Def.CounterType {
-			case perflib.PERF_ELAPSED_TIME:
+			case perflibCollector.PERF_ELAPSED_TIME:
 				target.Field(i).SetFloat(float64(ctr.Value-windowsEpoch) / float64(obj.Frequency))
-			case perflib.PERF_100NSEC_TIMER, perflib.PERF_PRECISION_100NS_TIMER:
+			case perflibCollector.PERF_100NSEC_TIMER, perflibCollector.PERF_PRECISION_100NS_TIMER:
 				target.Field(i).SetFloat(float64(ctr.Value) * ticksToSecondsScaleFactor)
 			default:
 				target.Field(i).SetFloat(float64(ctr.Value))

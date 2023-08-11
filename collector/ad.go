@@ -6,16 +6,17 @@ package collector
 import (
 	"errors"
 
-	"github.com/go-kit/log"
-	"github.com/go-kit/log/level"
+	"github.com/prometheus-community/windows_exporter/log"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/yusufpapurcu/wmi"
 )
 
+func init() {
+	registerCollector("ad", NewADCollector)
+}
+
 // A ADCollector is a Prometheus collector for WMI Win32_PerfRawData_DirectoryServices_DirectoryServices metrics
 type ADCollector struct {
-	logger log.Logger
-
 	AddressBookOperationsTotal                          *prometheus.Desc
 	AddressBookClientSessions                           *prometheus.Desc
 	ApproximateHighestDistinguishedNameTag              *prometheus.Desc
@@ -79,12 +80,10 @@ type ADCollector struct {
 	TombstonedObjectsVisitedTotal                       *prometheus.Desc
 }
 
-// newADCollector ...
-func newADCollector(logger log.Logger) (Collector, error) {
+// NewADCollector ...
+func NewADCollector() (Collector, error) {
 	const subsystem = "ad"
 	return &ADCollector{
-		logger: log.With(logger, "collector", subsystem),
-
 		AddressBookOperationsTotal: prometheus.NewDesc(
 			prometheus.BuildFQName(Namespace, subsystem, "address_book_operations_total"),
 			"",
@@ -458,7 +457,7 @@ func newADCollector(logger log.Logger) (Collector, error) {
 // to the provided prometheus Metric channel.
 func (c *ADCollector) Collect(ctx *ScrapeContext, ch chan<- prometheus.Metric) error {
 	if desc, err := c.collect(ch); err != nil {
-		_ = level.Error(c.logger).Log("msg", "failed collecting ad metrics", "desc", desc, "err", err)
+		log.Error("failed collecting ad metrics:", desc, err)
 		return err
 	}
 	return nil
@@ -618,7 +617,7 @@ type Win32_PerfRawData_DirectoryServices_DirectoryServices struct {
 
 func (c *ADCollector) collect(ch chan<- prometheus.Metric) (*prometheus.Desc, error) {
 	var dst []Win32_PerfRawData_DirectoryServices_DirectoryServices
-	q := queryAll(&dst, c.logger)
+	q := queryAll(&dst)
 	if err := wmi.Query(q, &dst); err != nil {
 		return nil, err
 	}
